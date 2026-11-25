@@ -1,0 +1,84 @@
+# Deploys one already-built artifact to one environment.
+# Called three times (dev -> staging -> prod) by dotnet-build-deploy.yml.
+name: deploy
+
+on:
+  workflow_call:
+    inputs:
+      app_name:    { type: string, required: true }
+      target:      { type: string, required: true }
+      cloud:       { type: string, required: true }
+      environment: { type: string, required: true }
+      version:     { type: string, required: true }
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    name: ${{ inputs.app_name }} -> ${{ inputs.environment }} (${{ inputs.target }})
+    runs-on: ubuntu-latest   # use a self-hosted runner inside the VNet/VPC once endpoints are private
+    environment: ${{ inputs.environment }}
+    concurrency: deploy-${{ inputs.app_name }}-${{ inputs.environment }}
+    env:
+      PACKAGE: dist/${{ inputs.app_name }}-${{ inputs.version }}.zip
+    steps:
+      - uses: actions/checkout@v4   # needed for the local composite actions
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.app_name }}
+          path: dist
+
+      # ---- OIDC login: IDs are per-environment *variables*, not secrets ----
+      - name: Azure login (OIDC)
+        if: inputs.cloud == 'azure'
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: AWS login (OIDC)
+        if: inputs.cloud == 'aws'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      # ---- one step per target (uses: cannot be dynamic) ----
+      - name: Deploy to App Service
+        if: inputs.target == 'appservice'
+        uses: ./.github/actions/deploy-appservice
+        with:
+          app_name: ${{ inputs.app_name }}
+          environment: ${{ inputs.environment }}
+          package: ${{ env.PACKAGE }}
+
+      - name: Deploy to Azure Functions
+        if: inputs.target == 'functions'
+        uses: ./.github/actions/deploy-functions
+        with:
+          app_name: ${{ inputs.app_name }}
+          environment: ${{ inputs.environment }}
+          package: ${{ env.PACKAGE }}
+
+      - name: Deploy to IIS on Windows VM
+        if: inputs.target == 'iis-vm'
+        uses: ./.github/actions/deploy-iis-vm
+        with:
+          app_name: ${{ inputs.app_name }}
+          environment: ${{ inputs.environment }}
+          version: ${{ inputs.version }}
+          package: ${{ env.PACKAGE }}
+          artifact_storage: ${{ vars.AZURE_ARTIFACT_STORAGE }}
+
+      - name: Deploy to EC2 behind ALB
+        if: inputs.target == 'ec2-alb'
+        uses: ./.github/actions/deploy-ec2-alb
+        with:
+          app_name: ${{ inputs.app_name }}
+          environment: ${{ inputs.environment }}
+          package: ${{ env.PACKAGE }}
+          artifact_bucket: ${{ vars.AWS_ARTIFACT_BUCKET }}

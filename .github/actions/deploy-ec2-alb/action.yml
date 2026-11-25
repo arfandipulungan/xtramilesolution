@@ -1,0 +1,38 @@
+name: deploy-ec2-alb
+description: CodeDeploy blue/green behind the ALB. Auto-rollback on failure or CloudWatch alarm is configured on the deployment group (Terraform).
+inputs:
+  app_name:        { description: App name (CodeDeploy application), required: true }
+  environment:     { description: dev | staging | prod, required: true }
+  package:         { description: Path to the zip bundle (must contain appspec.yml), required: true }
+  artifact_bucket: { description: "Private, KMS-encrypted artifact bucket", required: true }
+runs:
+  using: composite
+  steps:
+    - name: Upload bundle to S3
+      shell: bash
+      run: |
+        key="${{ inputs.app_name }}/$(basename "${{ inputs.package }}")"
+        aws s3 cp "${{ inputs.package }}" "s3://${{ inputs.artifact_bucket }}/$key"
+        echo "BUNDLE_KEY=$key" >> "$GITHUB_ENV"
+
+    - name: Create blue/green deployment
+      shell: bash
+      run: |
+        id=$(aws deploy create-deployment \
+          --application-name "${{ inputs.app_name }}" \
+          --deployment-group-name "${{ inputs.app_name }}-${{ inputs.environment }}" \
+          --s3-location "bucket=${{ inputs.artifact_bucket }},key=$BUNDLE_KEY,bundleType=zip" \
+          --description "${{ github.repository }}@${{ github.sha }}" \
+          --query deploymentId --output text)
+        echo "DEPLOYMENT_ID=$id" >> "$GITHUB_ENV"
+        echo "CodeDeploy deployment: $id"
+
+    - name: Wait for result (CodeDeploy rolls back by itself on failure/alarm)
+      shell: bash
+      run: |
+        if ! aws deploy wait deployment-successful --deployment-id "$DEPLOYMENT_ID"; then
+          aws deploy get-deployment --deployment-id "$DEPLOYMENT_ID" \
+            --query 'deploymentInfo.{status:status,error:errorInformation,rollback:rollbackInfo}'
+          echo "::error::Deployment failed - traffic stays on the previous (blue) fleet"
+          exit 1
+        fi

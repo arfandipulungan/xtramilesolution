@@ -1,0 +1,42 @@
+name: deploy-appservice
+description: Deploy to the staging slot, smoke test, swap; swap back automatically if production is unhealthy.
+inputs:
+  app_name:    { description: App name, required: true }
+  environment: { description: dev | staging | prod, required: true }
+  package:     { description: Path to the zip artifact, required: true }
+  health_path: { description: Health endpoint, required: false, default: /health }
+runs:
+  using: composite
+  steps:
+    - name: Resolve names (naming convention shared with Terraform)
+      shell: bash
+      run: |
+        echo "RG=rg-${{ inputs.app_name }}-${{ inputs.environment }}"      >> "$GITHUB_ENV"
+        echo "WEBAPP=app-${{ inputs.app_name }}-${{ inputs.environment }}" >> "$GITHUB_ENV"
+
+    - name: Deploy to staging slot
+      uses: azure/webapps-deploy@v3
+      with:
+        app-name: ${{ env.WEBAPP }}
+        slot-name: staging
+        package: ${{ inputs.package }}
+
+    - name: Smoke test staging slot
+      shell: bash
+      run: |
+        host=$(az webapp show -g "$RG" -n "$WEBAPP" --slot staging --query defaultHostName -o tsv)
+        for i in $(seq 1 10); do curl -fsS "https://$host${{ inputs.health_path }}" && exit 0; sleep 6; done
+        echo "::error::Staging slot unhealthy - production untouched"; exit 1
+
+    - name: Swap staging -> production
+      shell: bash
+      run: az webapp deployment slot swap -g "$RG" -n "$WEBAPP" --slot staging --target-slot production
+
+    - name: Verify production (rollback = swap back)
+      shell: bash
+      run: |
+        host=$(az webapp show -g "$RG" -n "$WEBAPP" --query defaultHostName -o tsv)
+        for i in $(seq 1 10); do curl -fsS "https://$host${{ inputs.health_path }}" && exit 0; sleep 6; done
+        echo "::error::Production unhealthy after swap - rolling back"
+        az webapp deployment slot swap -g "$RG" -n "$WEBAPP" --slot staging --target-slot production
+        exit 1

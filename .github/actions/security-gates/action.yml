@@ -1,0 +1,37 @@
+name: security-gates
+description: Secrets, SCA, SAST and IaC scanning. Any High/Critical finding fails the build.
+inputs:
+  scan_path:
+    description: Application source folder
+    required: true
+  iac_path:
+    description: Optional Terraform folder
+    required: false
+    default: ""
+runs:
+  using: composite
+  steps:
+    - name: Secrets detection (Gitleaks, full history)
+      shell: bash
+      run: |
+        docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.18.4 \
+          detect --source /repo --redact --verbose
+
+    - name: SCA - vulnerable dependencies (Trivy)
+      shell: bash
+      run: |
+        docker run --rm -v "$PWD:/src" aquasec/trivy:0.56.2 fs /src/${{ inputs.scan_path }} \
+          --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1
+
+    - name: SAST (Semgrep, C# ruleset)
+      shell: bash
+      run: |
+        docker run --rm -v "$PWD:/src" semgrep/semgrep:1.90.0 \
+          semgrep scan --config p/csharp --error --metrics=off /src/${{ inputs.scan_path }}
+
+    - name: IaC scan (Checkov)
+      if: inputs.iac_path != ''
+      shell: bash
+      run: |
+        docker run --rm -v "$PWD:/src" bridgecrew/checkov:3.2.255 \
+          -d /src/${{ inputs.iac_path }} --framework terraform --compact

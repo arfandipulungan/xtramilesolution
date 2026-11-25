@@ -1,0 +1,34 @@
+name: deploy-iis-vm
+description: Upload the package to Blob, then Run Command on the VM pulls it with its managed identity, switches the IIS site to the new versioned folder and rolls back on a failed health check.
+inputs:
+  app_name:         { description: App name, required: true }
+  environment:      { description: dev | staging | prod, required: true }
+  version:          { description: Release version, required: true }
+  package:          { description: Path to the zip artifact, required: true }
+  artifact_storage: { description: Storage account holding release packages, required: true }
+runs:
+  using: composite
+  steps:
+    - name: Upload package (Entra auth, no account keys)
+      shell: bash
+      run: |
+        name="${{ inputs.app_name }}/$(basename "${{ inputs.package }}")"
+        az storage blob upload --auth-mode login --overwrite \
+          --account-name "${{ inputs.artifact_storage }}" --container-name releases \
+          --name "$name" --file "${{ inputs.package }}"
+        echo "BLOB_URL=https://${{ inputs.artifact_storage }}.blob.core.windows.net/releases/$name" >> "$GITHUB_ENV"
+
+    - name: Deploy via Run Command (no public RDP/WinRM)
+      shell: bash
+      run: |
+        out=$(az vm run-command invoke \
+          -g "rg-${{ inputs.app_name }}-${{ inputs.environment }}" \
+          -n "vm-${{ inputs.app_name }}-${{ inputs.environment }}" \
+          --command-id RunPowerShellScript \
+          --scripts @"${{ github.action_path }}/deploy-iis.ps1" \
+          --parameters "AppName=${{ inputs.app_name }}" "Version=${{ inputs.version }}" "BlobUrl=$BLOB_URL" \
+          -o json)
+        echo "$out" | jq -r '.value[].message'
+        # Run Command returns success even when the script fails, so check stderr
+        err=$(echo "$out" | jq -r '.value[] | select(.code | contains("StdErr")) | .message')
+        if [ -n "$err" ]; then echo "::error::IIS deployment failed (rolled back on the VM)"; exit 1; fi

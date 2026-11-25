@@ -1,0 +1,151 @@
+# Shared, reusable CI/CD template for every .NET app on every target.
+# Consumers call it with `uses:` and only pass parameters.
+name: dotnet-build-deploy
+
+on:
+  workflow_call:
+    inputs:
+      app_name:
+        description: "Short app name, also used by the resource naming convention"
+        type: string
+        required: true
+      runtime:
+        description: "net48 | net8"
+        type: string
+        required: true
+      target:
+        description: "iis-vm | appservice | functions | ec2-alb"
+        type: string
+        required: true
+      cloud:
+        description: "azure | aws"
+        type: string
+        required: true
+      solution_path:
+        description: "Folder containing the .sln (tests run from here)"
+        type: string
+        required: true
+      publish_project:
+        description: "Path to the deployable .csproj"
+        type: string
+        required: true
+      iac_path:
+        description: "Optional Terraform folder for this app (scanned by Checkov)"
+        type: string
+        default: ""
+      deploy:
+        description: "false on pull requests: build + security gates only"
+        type: boolean
+        default: true
+
+permissions:
+  id-token: write   # OIDC to Azure / AWS, no long-lived keys
+  contents: read
+
+jobs:
+  build:
+    name: Build & test (${{ inputs.runtime }})
+    runs-on: ${{ inputs.runtime == 'net48' && 'windows-latest' || 'ubuntu-latest' }}
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute version
+        id: ver
+        shell: bash
+        run: echo "version=1.0.${{ github.run_number }}-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      # ---- .NET 8 ----
+      - name: Setup .NET 8
+        if: inputs.runtime == 'net8'
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Build, test, publish (.NET 8)
+        if: inputs.runtime == 'net8'
+        shell: bash
+        run: |
+          dotnet restore "${{ inputs.solution_path }}"
+          dotnet build   "${{ inputs.solution_path }}" -c Release --no-restore
+          dotnet test    "${{ inputs.solution_path }}" -c Release --no-build
+          dotnet publish "${{ inputs.publish_project }}" -c Release -o out
+
+      # ---- .NET Framework 4.8 ----
+      - name: Setup MSBuild
+        if: inputs.runtime == 'net48'
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Setup NuGet
+        if: inputs.runtime == 'net48'
+        uses: nuget/setup-nuget@v2
+
+      - name: Setup VSTest
+        if: inputs.runtime == 'net48'
+        uses: darenm/Setup-VSTest@v1.3
+
+      - name: Build, test, publish (.NET Framework 4.8)
+        if: inputs.runtime == 'net48'
+        shell: pwsh
+        run: |
+          nuget restore "${{ inputs.solution_path }}"
+          msbuild "${{ inputs.solution_path }}" /p:Configuration=Release /m
+          $tests = Get-ChildItem -Recurse -Filter *Tests.dll | Where-Object { $_.FullName -match '\\bin\\Release\\' }
+          if ($tests) { vstest.console.exe $tests.FullName }
+          msbuild "${{ inputs.publish_project }}" /p:Configuration=Release /p:DeployOnBuild=true `
+            /p:WebPublishMethod=FileSystem /p:PublishUrl="$PWD\out" /p:DeleteExistingFiles=true
+
+      # ---- one immutable artifact, promoted to every environment ----
+      - name: Package
+        shell: pwsh
+        run: Compress-Archive -Path out/* -DestinationPath "${{ inputs.app_name }}-${{ steps.ver.outputs.version }}.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.app_name }}
+          path: ${{ inputs.app_name }}-${{ steps.ver.outputs.version }}.zip
+          retention-days: 30
+
+  security:
+    name: Security gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history for secrets scanning
+      - uses: ./.github/actions/security-gates
+        with:
+          scan_path: ${{ inputs.solution_path }}
+          iac_path: ${{ inputs.iac_path }}
+
+  deploy-dev:
+    needs: [build, security]
+    if: inputs.deploy
+    uses: ./.github/workflows/deploy.yml
+    with:
+      app_name: ${{ inputs.app_name }}
+      target: ${{ inputs.target }}
+      cloud: ${{ inputs.cloud }}
+      environment: dev
+      version: ${{ needs.build.outputs.version }}
+
+  deploy-staging:
+    needs: [build, deploy-dev]
+    uses: ./.github/workflows/deploy.yml
+    with:
+      app_name: ${{ inputs.app_name }}
+      target: ${{ inputs.target }}
+      cloud: ${{ inputs.cloud }}
+      environment: staging
+      version: ${{ needs.build.outputs.version }}
+
+  deploy-prod:
+    needs: [build, deploy-staging]
+    uses: ./.github/workflows/deploy.yml
+    with:
+      app_name: ${{ inputs.app_name }}
+      target: ${{ inputs.target }}
+      cloud: ${{ inputs.cloud }}
+      environment: prod   # protected: required reviewers + main branch only
+      version: ${{ needs.build.outputs.version }}

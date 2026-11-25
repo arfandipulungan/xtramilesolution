@@ -1,0 +1,31 @@
+# Consumer: .NET 8 Web API on Azure App Service
+name: customer-api
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/customer-api/**"
+      - ".github/workflows/dotnet-build-deploy.yml"
+      - ".github/workflows/deploy.yml"
+      - ".github/actions/**"
+  pull_request:
+    paths: ["apps/customer-api/**"]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  pipeline:
+    uses: ./.github/workflows/dotnet-build-deploy.yml
+    with:
+      app_name: customer-api
+      runtime: net8
+      target: appservice
+      cloud: azure
+      solution_path: apps/customer-api
+      publish_project: apps/customer-api/src/CustomerApi/CustomerApi.csproj
+      iac_path: infra/live/prod/azure/customer-api
+      deploy: ${{ github.event_name != 'pull_request' }}

@@ -1,0 +1,31 @@
+# Consumer: AWS web/app tier on EC2 behind the ALB. Same template, different parameters.
+name: legacy-web
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/legacy-web/**"
+      - ".github/workflows/dotnet-build-deploy.yml"
+      - ".github/workflows/deploy.yml"
+      - ".github/actions/**"
+  pull_request:
+    paths: ["apps/legacy-web/**"]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  pipeline:
+    uses: ./.github/workflows/dotnet-build-deploy.yml
+    with:
+      app_name: legacy-web
+      runtime: net8
+      target: ec2-alb
+      cloud: aws
+      solution_path: apps/legacy-web
+      publish_project: apps/legacy-web/src/LegacyWeb/LegacyWeb.csproj
+      iac_path: infra/live/prod/aws/legacy-web
+      deploy: ${{ github.event_name != 'pull_request' }}
