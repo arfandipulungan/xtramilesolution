@@ -98,11 +98,19 @@ jobs:
             /p:WebPublishMethod=FileSystem /p:PublishUrl="$PWD\out" /p:DeleteExistingFiles=true
 
       # ---- one immutable artifact, promoted to every environment ----
-      - name: Package
+      - name: Package (Linux, keeps execute bit for deploy hook scripts)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          find out -name '*.sh' -exec chmod +x {} +
+          (cd out && zip -qr "../${{ inputs.app_name }}-${{ steps.ver.outputs.version }}.zip" .)
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
         shell: pwsh
         run: Compress-Archive -Path out/* -DestinationPath "${{ inputs.app_name }}-${{ steps.ver.outputs.version }}.zip"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ inputs.app_name }}
           path: ${{ inputs.app_name }}-${{ steps.ver.outputs.version }}.zip
@@ -118,10 +126,43 @@ jobs:
       - uses: ./.github/actions/security-gates
         with:
           scan_path: ${{ inputs.solution_path }}
+          runtime: ${{ inputs.runtime }}
           iac_path: ${{ inputs.iac_path }}
 
+  artifact-scan:
+    # Image/artifact scanning: scan exactly what will be deployed (published binaries,
+    # *.deps.json, config files) for vulnerable components and leaked secrets.
+    # Same gate for every target; VM golden images (Packer) are scanned in the image pipeline.
+    name: Artifact scan
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: ${{ inputs.app_name }}
+          path: dist
+
+      - name: Unpack release artifact
+        shell: bash
+        run: |
+          mkdir -p release
+          unzip -q "dist/${{ inputs.app_name }}-${{ needs.build.outputs.version }}.zip" -d release
+
+      - name: Install Trivy
+        shell: bash
+        run: |
+          curl -sSLf https://github.com/aquasecurity/trivy/releases/download/v0.76.2/trivy_0.76.2_Linux-64bit.tar.gz \
+            | tar -xz -C /tmp trivy
+
+      - name: Trivy scan of the release artifact (fails on High/Critical)
+        shell: bash
+        run: |
+          /tmp/trivy rootfs release \
+            --scanners vuln,secret \
+            --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1
+
   deploy-dev:
-    needs: [build, security]
+    needs: [build, security, artifact-scan]
     if: contains(fromJSON('["dev","staging","prod"]'), inputs.deploy_to)
     uses: ./.github/workflows/deploy.yml
     with:

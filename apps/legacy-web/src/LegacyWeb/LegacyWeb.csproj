@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+  <!-- CodeDeploy needs appspec.yml at the root of the bundle, plus its hook scripts -->
+  <ItemGroup>
+    <None Update="deploy\appspec.yml" Link="appspec.yml" CopyToPublishDirectory="PreserveNewest" />
+    <None Update="deploy\scripts\*.sh" Link="scripts\%(Filename)%(Extension)" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

@@ -1,8 +1,11 @@
 name: security-gates
-description: Secrets, SCA, SAST and IaC scanning. Any High/Critical finding fails the build.
+description: Secrets detection, SCA, SAST and IaC scanning. Any High/Critical finding fails the build.
 inputs:
   scan_path:
-    description: Application source folder
+    description: Application source folder (contains the .sln)
+    required: true
+  runtime:
+    description: net8 | net48
     required: true
   iac_path:
     description: Optional Terraform folder
@@ -11,18 +14,40 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Secrets detection (Gitleaks, full history)
+    - name: Install scanners (pinned versions)
       shell: bash
       run: |
-        # Native binary (not Docker) avoids git's "dubious ownership" error on the mounted repo
-        curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz \
+        curl -sSLf https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz \
           | tar -xz -C /tmp gitleaks
-        /tmp/gitleaks git --redact --verbose .
+        curl -sSLf https://github.com/aquasecurity/trivy/releases/download/v0.76.2/trivy_0.76.2_Linux-64bit.tar.gz \
+          | tar -xz -C /tmp trivy
 
-    - name: SCA - vulnerable dependencies (Trivy)
+    - name: Secrets detection (Gitleaks, full git history)
+      shell: bash
+      run: /tmp/gitleaks git --redact --verbose .
+
+    # SCA needs a resolved dependency graph. With RestorePackagesWithLockFile=true the restore
+    # writes packages.lock.json (direct + transitive) for Trivy. .NET Framework apps use
+    # packages.config, which Trivy reads directly, so no restore is needed for net48.
+    - name: Setup .NET 8 (for dependency resolution)
+      if: inputs.runtime == 'net8'
+      uses: actions/setup-dotnet@v6
+      with:
+        dotnet-version: "8.0.x"
+
+    - name: Resolve dependencies (writes packages.lock.json)
+      if: inputs.runtime == 'net8'
+      shell: bash
+      run: dotnet restore "${{ inputs.scan_path }}"
+
+    - name: SCA - vulnerable NuGet dependencies (Trivy)
       shell: bash
       run: |
-        docker run --rm -v "$PWD:/src" aquasec/trivy:0.56.2 fs /src/${{ inputs.scan_path }} \
+        lockfiles=$(find "${{ inputs.scan_path }}" -name packages.lock.json -o -name packages.config | wc -l)
+        if [ "$lockfiles" -eq 0 ]; then
+          echo "::error::No packages.lock.json or packages.config found - SCA would scan nothing"; exit 1
+        fi
+        /tmp/trivy fs "${{ inputs.scan_path }}" \
           --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1
 
     - name: SAST (Semgrep, C# ruleset)

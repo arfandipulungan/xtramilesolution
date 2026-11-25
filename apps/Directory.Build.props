@@ -1,0 +1,15 @@
+<Project>
+  <!-- Shared by every app under apps/ : one standard, not per-app snowflakes -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- packages.lock.json: reproducible restores, and Trivy reads it for SCA -->
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <!-- SCA gate #1 (build): NuGet audit checks direct + transitive packages,
+         and High/Critical advisories fail the build -->
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <WarningsAsErrors>$(WarningsAsErrors);NU1903;NU1904</WarningsAsErrors>
+  </PropertyGroup>
+</Project>

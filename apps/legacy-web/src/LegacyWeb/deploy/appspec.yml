@@ -1,0 +1,20 @@
+# CodeDeploy (EC2/On-premises, used with ALB blue/green). Bundle root = publish output.
+version: 0.0
+os: linux
+files:
+  - source: /
+    destination: /opt/legacy-web/app
+file_exists_behavior: OVERWRITE
+hooks:
+  ApplicationStop:
+    - location: scripts/stop.sh
+      timeout: 60
+  AfterInstall:
+    - location: scripts/install.sh
+      timeout: 120
+  ApplicationStart:
+    - location: scripts/start.sh
+      timeout: 60
+  ValidateService:
+    - location: scripts/validate.sh   # failure here = CodeDeploy rolls back, ALB keeps old fleet
+      timeout: 120

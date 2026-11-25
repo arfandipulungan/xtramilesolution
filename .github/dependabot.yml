@@ -5,5 +5,5 @@ updates:
     directory: /
     schedule: { interval: weekly }
   - package-ecosystem: nuget
-    directory: /apps/customer-api
+    directories: ["/apps/*"]
     schedule: { interval: weekly }
