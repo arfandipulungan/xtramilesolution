@@ -11,7 +11,14 @@ on:
       - ".github/actions/**"
   pull_request:
     paths: ["apps/legacy-web/**"]
+  # Manual run (Actions -> Run workflow) is the only way to deploy
   workflow_dispatch:
+    inputs:
+      deploy_to:
+        description: "Deploy after build & security gates"
+        type: choice
+        options: [none, dev, staging, prod]
+        default: dev
 
 permissions:
   id-token: write
@@ -28,4 +35,5 @@ jobs:
       solution_path: apps/legacy-web
       publish_project: apps/legacy-web/src/LegacyWeb/LegacyWeb.csproj
       iac_path: infra/live/prod/aws/legacy-web
-      deploy: ${{ github.event_name != 'pull_request' }}
+      # push / pull_request: build + security gates only (never deploys)
+      deploy_to: ${{ github.event_name == 'workflow_dispatch' && inputs.deploy_to || 'none' }}

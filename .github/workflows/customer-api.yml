@@ -11,7 +11,14 @@ on:
       - ".github/actions/**"
   pull_request:
     paths: ["apps/customer-api/**"]
+  # Manual run (Actions -> Run workflow) is the only way to deploy
   workflow_dispatch:
+    inputs:
+      deploy_to:
+        description: "Deploy after build & security gates"
+        type: choice
+        options: [none, dev, staging, prod]
+        default: dev
 
 permissions:
   id-token: write
@@ -27,5 +34,6 @@ jobs:
       cloud: azure
       solution_path: apps/customer-api
       publish_project: apps/customer-api/src/CustomerApi/CustomerApi.csproj
-      iac_path: infra/live/prod/azure/customer-api
-      deploy: ${{ github.event_name != 'pull_request' }}
+      # iac_path: infra/live/prod/azure/customer-api   # enable once Task 2 Terraform is in the repo
+      # push / pull_request: build + security gates only (never deploys)
+      deploy_to: ${{ github.event_name == 'workflow_dispatch' && inputs.deploy_to || 'none' }}

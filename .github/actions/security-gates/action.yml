@@ -14,8 +14,10 @@ runs:
     - name: Secrets detection (Gitleaks, full history)
       shell: bash
       run: |
-        docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.18.4 \
-          detect --source /repo --redact --verbose
+        # Native binary (not Docker) avoids git's "dubious ownership" error on the mounted repo
+        curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz \
+          | tar -xz -C /tmp gitleaks
+        /tmp/gitleaks git --redact --verbose .
 
     - name: SCA - vulnerable dependencies (Trivy)
       shell: bash

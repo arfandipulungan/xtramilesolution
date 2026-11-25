@@ -1,0 +1,10 @@
+bin/
+obj/
+out/
+*.user
+.vs/
+TestResults/
+*.zip
+.terraform/
+*.tfstate
+*.tfstate.*

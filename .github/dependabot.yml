@@ -1,0 +1,9 @@
+# Keeps action versions and NuGet packages patched (Essential 8: patch applications)
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }
+  - package-ecosystem: nuget
+    directory: /apps/customer-api
+    schedule: { interval: weekly }

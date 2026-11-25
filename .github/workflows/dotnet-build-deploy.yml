@@ -33,10 +33,10 @@ on:
         description: "Optional Terraform folder for this app (scanned by Checkov)"
         type: string
         default: ""
-      deploy:
-        description: "false on pull requests: build + security gates only"
-        type: boolean
-        default: true
+      deploy_to:
+        description: "none = build + security gates only; dev | staging | prod = deploy up to that environment"
+        type: string
+        default: none
 
 permissions:
   id-token: write   # OIDC to Azure / AWS, no long-lived keys
@@ -49,7 +49,7 @@ jobs:
     outputs:
       version: ${{ steps.ver.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Compute version
         id: ver
@@ -59,7 +59,7 @@ jobs:
       # ---- .NET 8 ----
       - name: Setup .NET 8
         if: inputs.runtime == 'net8'
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "8.0.x"
 
@@ -70,7 +70,8 @@ jobs:
           dotnet restore "${{ inputs.solution_path }}"
           dotnet build   "${{ inputs.solution_path }}" -c Release --no-restore
           dotnet test    "${{ inputs.solution_path }}" -c Release --no-build
-          dotnet publish "${{ inputs.publish_project }}" -c Release -o out
+          dotnet publish "${{ inputs.publish_project }}" -c Release -o out \
+            -p:InformationalVersion=${{ steps.ver.outputs.version }}
 
       # ---- .NET Framework 4.8 ----
       - name: Setup MSBuild
@@ -111,7 +112,7 @@ jobs:
     name: Security gates
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0   # full history for secrets scanning
       - uses: ./.github/actions/security-gates
@@ -121,7 +122,7 @@ jobs:
 
   deploy-dev:
     needs: [build, security]
-    if: inputs.deploy
+    if: contains(fromJSON('["dev","staging","prod"]'), inputs.deploy_to)
     uses: ./.github/workflows/deploy.yml
     with:
       app_name: ${{ inputs.app_name }}
@@ -132,6 +133,7 @@ jobs:
 
   deploy-staging:
     needs: [build, deploy-dev]
+    if: contains(fromJSON('["staging","prod"]'), inputs.deploy_to)
     uses: ./.github/workflows/deploy.yml
     with:
       app_name: ${{ inputs.app_name }}
@@ -142,6 +144,7 @@ jobs:
 
   deploy-prod:
     needs: [build, deploy-staging]
+    if: inputs.deploy_to == 'prod'
     uses: ./.github/workflows/deploy.yml
     with:
       app_name: ${{ inputs.app_name }}
