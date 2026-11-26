@@ -34,7 +34,7 @@ jobs:
       # ---- OIDC login: IDs are per-environment *variables*, not secrets ----
       - name: Azure login (OIDC)
         if: inputs.cloud == 'azure'
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
@@ -42,7 +42,7 @@ jobs:
 
       - name: AWS login (OIDC)
         if: inputs.cloud == 'aws'
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
