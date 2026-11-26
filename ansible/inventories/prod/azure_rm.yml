@@ -1,0 +1,18 @@
+---
+# Dynamic inventory: Azure VMs tagged by Terraform (infra/modules/azure/windows-vm).
+# Auth: the pipeline's OIDC login (az CLI); no secrets in this file.
+plugin: azure.azcollection.azure_rm
+auth_source: cli
+include_vm_resource_groups:
+  - "*-prod"
+conditional_groups:
+  windows_iis: "tags.ansible_group | default('') == 'windows_iis'"
+keyed_groups:
+  - prefix: app
+    key: tags.app | default('none')
+exclude_host_filters:
+  - powerstate != 'running'
+  - tags.environment | default('') != 'prod'
+hostvar_expressions:
+  ansible_host: private_ipv4_addresses | first
+plain_host_names: true

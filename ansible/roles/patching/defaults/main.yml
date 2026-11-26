@@ -1,0 +1,9 @@
+---
+# Essential 8 "patch operating systems": security and critical updates on every run.
+# Azure VMs also get platform-orchestrated patching (patch_mode = AutomaticByPlatform);
+# this role is the enforcement point and audit trail for both clouds.
+patching_reboot: true
+patching_windows_categories:
+  - SecurityUpdates
+  - CriticalUpdates
+  - UpdateRollups

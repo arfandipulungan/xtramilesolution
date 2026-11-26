@@ -1,0 +1,7 @@
+---
+# Entry point: configure every host in the selected environment (inventories/<env>).
+- name: Configure Windows IIS hosts
+  ansible.builtin.import_playbook: windows_iis.yml
+
+- name: Configure Linux app hosts
+  ansible.builtin.import_playbook: linux_app.yml

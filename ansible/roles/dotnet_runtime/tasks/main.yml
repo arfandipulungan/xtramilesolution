@@ -1,0 +1,33 @@
+---
+# Prepares hosts for the CodeDeploy bundle (apps/legacy-web): runtime, user, folders.
+# The systemd unit itself ships with the app (deploy/scripts/install.sh).
+- name: Install the ASP.NET Core runtime
+  ansible.builtin.dnf:
+    name: "{{ dotnet_runtime_package }}"
+    state: present
+
+- name: Create the non-root service user
+  ansible.builtin.user:
+    name: "{{ dotnet_runtime_service_user }}"
+    system: true
+    create_home: false
+    shell: /usr/sbin/nologin
+
+- name: Create the application root
+  ansible.builtin.file:
+    path: "{{ dotnet_runtime_app_root }}"
+    state: directory
+    owner: "{{ dotnet_runtime_service_user }}"
+    group: "{{ dotnet_runtime_service_user }}"
+    mode: "0750"
+
+- name: Install the CodeDeploy agent
+  ansible.builtin.dnf:
+    name: codedeploy-agent
+    state: present
+
+- name: Run the CodeDeploy agent
+  ansible.builtin.systemd_service:
+    name: codedeploy-agent
+    enabled: true
+    state: started

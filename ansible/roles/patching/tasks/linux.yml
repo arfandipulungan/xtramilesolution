@@ -1,0 +1,21 @@
+---
+- name: Install security updates only
+  ansible.builtin.dnf:
+    name: "*"
+    state: latest
+    security: true
+    update_only: true
+  register: patching_linux_result
+
+- name: Check whether a reboot is needed
+  ansible.builtin.command: needs-restarting -r
+  register: patching_needs_restart
+  changed_when: false
+  failed_when: patching_needs_restart.rc not in [0, 1]
+
+- name: Reboot when the kernel or core libraries changed
+  ansible.builtin.reboot:
+    reboot_timeout: 900
+  when:
+    - patching_reboot | bool
+    - patching_needs_restart.rc == 1

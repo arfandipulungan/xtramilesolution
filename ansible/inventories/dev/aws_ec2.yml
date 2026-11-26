@@ -1,0 +1,20 @@
+---
+# Dynamic inventory: EC2 instances tagged by Terraform (infra/modules/aws/ec2-asg).
+# Auth: the pipeline's OIDC role; connection goes through SSM, so no SSH or public IP.
+plugin: amazon.aws.aws_ec2
+regions:
+  - ap-southeast-2
+filters:
+  instance-state-name: running
+  tag:environment: dev
+  tag:managed-by: terraform
+keyed_groups:
+  - prefix: ""
+    separator: ""
+    key: tags.ansible_group
+  - prefix: app
+    key: tags.app
+hostnames:
+  - instance-id
+compose:
+  ansible_host: instance_id

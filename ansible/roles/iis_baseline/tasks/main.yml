@@ -1,0 +1,78 @@
+---
+- name: Install IIS and ASP.NET 4.8 features
+  ansible.windows.win_feature:
+    name: "{{ iis_baseline_features }}"
+    state: present
+  register: iis_baseline_features_result
+
+- name: Reboot when a feature requires it
+  ansible.windows.win_reboot:
+    reboot_timeout: 900
+  when: iis_baseline_features_result.reboot_required
+
+- name: Create site, release and log folders
+  ansible.windows.win_file:
+    path: "{{ item }}"
+    state: directory
+  loop:
+    - "{{ iis_baseline_root }}\\releases\\initial"
+    - "{{ iis_baseline_log_dir }}"
+
+- name: Remove the Default Web Site
+  microsoft.iis.website:
+    name: Default Web Site
+    state: absent
+
+- name: App pool with its own identity, 64-bit, integrated pipeline
+  microsoft.iis.web_app_pool:
+    name: "{{ iis_baseline_app_pool }}"
+    state: started
+    attributes:
+      managedRuntimeVersion: v4.0
+      managedPipelineMode: Integrated
+      enable32BitAppOnWin64: false
+      processModel.identityType: ApplicationPoolIdentity
+      processModel.loadUserProfile: true
+
+# The deploy pipeline (Task 1, deploy-iis-vm) switches physicalPath to a versioned
+# release folder. Ansible sets the path only when the site is first created, so a
+# configuration run never undoes a deployment (idempotent alongside the pipeline).
+- name: Check whether the site already exists
+  microsoft.iis.website_info:
+    name: "{{ iis_baseline_site_name }}"
+  register: iis_baseline_site_info
+
+- name: Create or update the site (HTTPS only)
+  microsoft.iis.website:
+    name: "{{ iis_baseline_site_name }}"
+    state: started
+    application_pool: "{{ iis_baseline_app_pool }}"
+    physical_path: "{{ omit if iis_baseline_site_info.exists else iis_baseline_root ~ '\\releases\\initial' }}"
+    bindings:
+      set:
+        - port: 443
+          protocol: https
+          certificate_hash: "{{ iis_baseline_cert_thumbprint }}"
+          certificate_store_name: my
+
+- name: Remove the Server header from responses (http.sys)
+  ansible.windows.win_regedit:
+    path: HKLM:\SYSTEM\CurrentControlSet\Services\HTTP\Parameters
+    name: DisableServerHeader
+    data: 2
+    type: dword
+  notify: Restart IIS
+
+- name: Write IIS logs to the dedicated log folder (collected by Azure Monitor Agent)
+  ansible.windows.win_powershell:
+    script: |
+      Import-Module WebAdministration
+      $filter = 'system.applicationHost/sites/siteDefaults/logFile'
+      $current = (Get-WebConfigurationProperty -PSPath 'MACHINE/WEBROOT/APPHOST' -Filter $filter -Name directory).Value
+      if ($current -ne '{{ iis_baseline_log_dir }}') {
+        Set-WebConfigurationProperty -PSPath 'MACHINE/WEBROOT/APPHOST' -Filter $filter -Name directory -Value '{{ iis_baseline_log_dir }}'
+        $Ansible.Changed = $true
+      }
+      else {
+        $Ansible.Changed = $false
+      }

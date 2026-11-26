@@ -1,0 +1,4 @@
+# Custom labels of the self-hosted runners that sit inside the hub network
+self-hosted-runner:
+  labels:
+    - hub

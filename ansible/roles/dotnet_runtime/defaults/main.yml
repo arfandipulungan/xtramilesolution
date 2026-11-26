@@ -1,0 +1,4 @@
+---
+dotnet_runtime_package: aspnetcore-runtime-8.0
+dotnet_runtime_service_user: legacyweb
+dotnet_runtime_app_root: /opt/legacy-web

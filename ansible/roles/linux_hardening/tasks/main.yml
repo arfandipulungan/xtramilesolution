@@ -1,0 +1,66 @@
+---
+# Access is via SSM Session Manager only (audited); SSH is not needed and stays off.
+- name: Disable and stop sshd
+  ansible.builtin.systemd_service:
+    name: sshd
+    enabled: false
+    state: stopped
+
+- name: Make sure the SSM agent is running
+  ansible.builtin.systemd_service:
+    name: amazon-ssm-agent
+    enabled: true
+    state: started
+
+- name: Kernel network and memory hardening
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    sysctl_file: /etc/sysctl.d/90-hardening.conf
+    reload: true
+  loop: "{{ linux_hardening_sysctl | dict2items }}"
+
+- name: Remove legacy clear-text clients
+  ansible.builtin.dnf:
+    name: "{{ linux_hardening_packages_absent }}"
+    state: absent
+
+- name: Install auditd
+  ansible.builtin.dnf:
+    name: audit
+    state: present
+
+- name: Audit rules for identity, privilege and time changes
+  ansible.builtin.copy:
+    src: hardening.rules
+    dest: /etc/audit/rules.d/hardening.rules
+    owner: root
+    group: root
+    mode: "0640"
+  notify: Load audit rules
+
+- name: Enable auditd
+  ansible.builtin.systemd_service:
+    name: auditd
+    enabled: true
+    state: started
+
+- name: Automatic security updates between maintenance runs
+  ansible.builtin.dnf:
+    name: dnf-automatic
+    state: present
+
+- name: Apply security updates automatically
+  ansible.builtin.lineinfile:
+    path: /etc/dnf/automatic.conf
+    regexp: "^{{ item.key }} ="
+    line: "{{ item.key }} = {{ item.value }}"
+  loop:
+    - { key: upgrade_type, value: security }
+    - { key: apply_updates, value: "yes" }
+
+- name: Enable the dnf-automatic timer
+  ansible.builtin.systemd_service:
+    name: dnf-automatic.timer
+    enabled: true
+    state: started
