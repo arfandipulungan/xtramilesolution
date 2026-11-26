@@ -61,7 +61,7 @@ jobs:
         run: ansible-lint
 
   configure:
-    name: Configure hosts (${{ inputs.environment || 'dev' }}, ${{ inputs.mode || 'check' }})
+    name: Configure hosts
     needs: lint
     # Needs real hosts: enable with repo variable ANSIBLE_HOSTS_ENABLED=true once the
     # self-hosted runner in the hub and the OIDC identities exist (Task 2 Terraform).
