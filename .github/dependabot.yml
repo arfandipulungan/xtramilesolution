@@ -4,6 +4,12 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly }
+    groups:
+      github-actions:
+        patterns: ["*"]
   - package-ecosystem: nuget
     directories: ["/apps/*"]
     schedule: { interval: weekly }
+    groups:
+      test-dependencies:
+        patterns: ["xunit*", "Microsoft.NET.Test.Sdk", "Microsoft.AspNetCore.Mvc.Testing"]
