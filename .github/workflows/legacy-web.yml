@@ -6,11 +6,13 @@ on:
     branches: [main]
     paths:
       - "apps/legacy-web/**"
+      - ".github/workflows/legacy-web.yml"
       - ".github/workflows/dotnet-build-deploy.yml"
       - ".github/workflows/deploy.yml"
       - ".github/actions/**"
+  # No path filter on PRs: the three required status checks must report on EVERY PR,
+  # otherwise PRs that only touch other files (docs, dependabot.yml) could never merge.
   pull_request:
-    paths: ["apps/legacy-web/**"]
   # Manual run (Actions -> Run workflow) is the only way to deploy
   workflow_dispatch:
     inputs:
