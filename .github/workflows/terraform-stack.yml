@@ -71,7 +71,7 @@ jobs:
           checkov -d . --framework terraform --compact --quiet $extra
 
   plan-apply:
-    name: ${{ inputs.mode }} ${{ inputs.working_dir }}
+    name: Plan / apply
     needs: validate
     if: inputs.mode != 'validate'
     runs-on: ubuntu-latest

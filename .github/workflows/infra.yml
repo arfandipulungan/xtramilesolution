@@ -77,3 +77,15 @@ jobs:
           || (github.event_name == 'schedule' && 'plan')
           || (github.event_name == 'push' && 'apply')
           || 'plan' }}
+
+  infra-checks:
+      name: Infra checks
+      needs: [fmt, discover, stack]
+      if: always()
+      runs-on: ubuntu-latest
+      steps:
+      - name: All Terraform roots passed
+        run: |
+          echo "fmt=${{ needs.fmt.result }} discover=${{ needs.discover.result }} stack=${{ needs.stack.result }}"
+          [ "${{ needs.fmt.result }}" = "success" ] && [ "${{ needs.discover.result }}" = "success" ] \
+            && [ "${{ needs.stack.result }}" = "success" ]
