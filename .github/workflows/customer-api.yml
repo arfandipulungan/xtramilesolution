@@ -36,6 +36,6 @@ jobs:
       cloud: azure
       solution_path: apps/customer-api
       publish_project: apps/customer-api/src/CustomerApi/CustomerApi.csproj
-      # iac_path: infra/live/prod/azure/customer-api   # enable once Task 2 Terraform is in the repo
+      iac_path: infra/live/prod/azure/customer-api
       # push / pull_request: build + security gates only (never deploys)
       deploy_to: ${{ github.event_name == 'workflow_dispatch' && inputs.deploy_to || 'none' }}

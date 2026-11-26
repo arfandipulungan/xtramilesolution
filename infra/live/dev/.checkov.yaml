@@ -1,0 +1,5 @@
+# Dev-only exceptions, reviewed: dev runs a single App Service instance in one zone to save cost.
+# Prod is scanned without these exceptions.
+skip-check:
+  - CKV_AZURE_212 # minimum instances for failover
+  - CKV_AZURE_225 # zone-redundant App Service plan

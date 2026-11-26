@@ -1,0 +1,129 @@
+# Reusable: validate / plan / apply ONE Terraform root (infra/live/<env>/<cloud>/<app>).
+# Same pattern as dotnet-build-deploy.yml: callers only pass parameters.
+name: terraform-stack
+
+on:
+  workflow_call:
+    inputs:
+      working_dir:
+        description: "Live root, e.g. infra/live/prod/aws/legacy-web"
+        type: string
+        required: true
+      cloud:
+        description: "azure | aws"
+        type: string
+        required: true
+      environment:
+        description: "dev | staging | prod"
+        type: string
+        required: true
+      mode:
+        description: "validate (no cloud access) | plan | apply"
+        type: string
+        default: validate
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  TF_VERSION: "1.17.2"
+  TFLINT_VERSION: "0.66.0"
+  CHECKOV_VERSION: "3.4.11"
+  TF_IN_AUTOMATION: "true"
+
+jobs:
+  validate:
+    name: Validate ${{ inputs.working_dir }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working_dir }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: terraform init (no backend, no cloud credentials)
+        run: terraform init -backend=false -input=false
+
+      - name: terraform validate
+        run: terraform validate -no-color
+
+      - name: tflint
+        env:
+          GITHUB_TOKEN: ${{ github.token }}   # plugin downloads
+        run: |
+          curl -sSLf -o /tmp/tflint.zip \
+            https://github.com/terraform-linters/tflint/releases/download/v${TFLINT_VERSION}/tflint_linux_amd64.zip
+          unzip -oq /tmp/tflint.zip -d /tmp
+          /tmp/tflint --init --config="$GITHUB_WORKSPACE/infra/.tflint.hcl"
+          /tmp/tflint --config="$GITHUB_WORKSPACE/infra/.tflint.hcl" --format=compact
+
+      - name: Checkov (policy-as-code, fails on any unjustified finding)
+        run: |
+          pipx install --quiet "checkov==${CHECKOV_VERSION}"   # pipx: the runner's system Python is externally managed
+          cfg="$GITHUB_WORKSPACE/infra/live/${{ inputs.environment }}/.checkov.yaml"
+          extra=""; [ -f "$cfg" ] && extra="--config-file $cfg"
+          checkov -d . --framework terraform --compact --quiet $extra
+
+  plan-apply:
+    name: ${{ inputs.mode }} ${{ inputs.working_dir }}
+    needs: validate
+    if: inputs.mode != 'validate'
+    runs-on: ubuntu-latest
+    # plan -> infra-<env>-plan (read-only identity, no approval)
+    # apply -> infra-<env> (write identity, approval required for prod)
+    environment: ${{ inputs.mode == 'apply' && format('infra-{0}', inputs.environment) || format('infra-{0}-plan', inputs.environment) }}
+    concurrency: terraform-${{ inputs.working_dir }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working_dir }}
+    env:
+      ARM_USE_OIDC: "true"
+      ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: AWS login (OIDC)
+        if: inputs.cloud == 'aws'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_TERRAFORM_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: terraform init (remote state + locking)
+        run: terraform init -input=false
+
+      - name: terraform plan
+        id: plan
+        run: |
+          set +e
+          terraform plan -input=false -no-color -detailed-exitcode -out=tfplan > plan.txt
+          code=$?
+          set -e
+          cat plan.txt
+          { echo "### Plan: ${{ inputs.working_dir }}"; echo '```'; tail -n 60 plan.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          # 0 = no changes, 2 = changes present, 1 = error
+          [ "$code" -eq 1 ] && exit 1
+          echo "changes=$([ "$code" -eq 2 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - name: Drift detection (scheduled run)
+        if: github.event_name == 'schedule' && steps.plan.outputs.changes == 'true'
+        run: |
+          echo "::error::Drift detected in ${{ inputs.working_dir }}: real infrastructure differs from code"
+          exit 1
+
+      - name: terraform apply (reviewed plan only)
+        if: inputs.mode == 'apply' && steps.plan.outputs.changes == 'true'
+        run: terraform apply -input=false -no-color tfplan

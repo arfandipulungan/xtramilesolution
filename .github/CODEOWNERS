@@ -1,0 +1,9 @@
+# Who must review what. In a team each line points to its own GitHub team, e.g.
+#   /infra/            @org/platform-team
+#   /apps/customer-api @org/team-customer
+# Single-maintainer demo: everything maps to the repo owner.
+*                       @arfandipulungan
+/infra/                 @arfandipulungan
+/.github/               @arfandipulungan
+/apps/customer-api/     @arfandipulungan
+/apps/legacy-web/       @arfandipulungan

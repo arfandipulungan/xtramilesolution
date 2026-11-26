@@ -36,6 +36,6 @@ jobs:
       cloud: aws
       solution_path: apps/legacy-web
       publish_project: apps/legacy-web/src/LegacyWeb/LegacyWeb.csproj
-      # iac_path: infra/live/prod/aws/legacy-web   # enable once Task 2 Terraform is in the repo
+      iac_path: infra/live/prod/aws/legacy-web
       # push / pull_request: build + security gates only (never deploys)
       deploy_to: ${{ github.event_name == 'workflow_dispatch' && inputs.deploy_to || 'none' }}
