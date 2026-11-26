@@ -1,0 +1,79 @@
+# Infrastructure pipeline: discovers every live root and runs the reusable
+# terraform-stack workflow for each. A new app/env/cloud folder is picked up automatically.
+name: infra
+
+on:
+  pull_request:          # no path filter: the "infra" checks report on every PR
+  push:
+    branches: [main]
+    paths: ["infra/**", ".github/workflows/infra.yml", ".github/workflows/terraform-stack.yml"]
+  schedule:
+    - cron: "0 20 * * *" # daily drift detection (plan with -detailed-exitcode)
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "plan or apply"
+        type: choice
+        options: [plan, apply]
+        default: plan
+      environment:
+        description: "Limit to one environment"
+        type: choice
+        options: [dev, staging, prod]
+        default: dev
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  fmt:
+    name: Terraform fmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "1.17.2"
+          terraform_wrapper: false
+      - run: terraform fmt -check -recursive -diff infra
+
+  discover:
+    name: Discover live roots
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.find.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: find
+        shell: bash
+        run: |
+          only="${{ github.event_name == 'workflow_dispatch' && inputs.environment || '' }}"
+          roots=$(find infra/live -mindepth 3 -maxdepth 3 -type d | sort | while read -r d; do
+            env=$(echo "$d" | cut -d/ -f3); cloud=$(echo "$d" | cut -d/ -f4)
+            if [ -z "$only" ] || [ "$env" = "$only" ]; then
+              printf '{"dir":"%s","env":"%s","cloud":"%s"}\n' "$d" "$env" "$cloud"
+            fi
+          done | jq -sc '{include: .}')
+          echo "matrix=$roots" >> "$GITHUB_OUTPUT"
+          echo "$roots" | jq .
+
+  stack:
+    name: ${{ matrix.dir }}
+    needs: [fmt, discover]
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.discover.outputs.matrix) }}
+    uses: ./.github/workflows/terraform-stack.yml
+    with:
+      working_dir: ${{ matrix.dir }}
+      cloud: ${{ matrix.cloud }}
+      environment: ${{ matrix.env }}
+      # PR/push: validate only. Plan/apply need cloud credentials: set repo variable
+      # TF_CLOUD_ENABLED=true once the OIDC identities and state backends exist.
+      mode: >-
+        ${{ vars.TF_CLOUD_ENABLED != 'true' && 'validate'
+          || (github.event_name == 'workflow_dispatch' && inputs.mode)
+          || (github.event_name == 'schedule' && 'plan')
+          || (github.event_name == 'push' && 'apply')
+          || 'plan' }}

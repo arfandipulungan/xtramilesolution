@@ -56,9 +56,9 @@ runs:
         docker run --rm -v "$PWD:/src" semgrep/semgrep:1.90.0 \
           semgrep scan --config p/csharp --error --metrics=off /src/${{ inputs.scan_path }}
 
-    - name: IaC scan (Checkov)
+    - name: IaC scan (Checkov, same pinned version as the infra pipeline)
       if: inputs.iac_path != ''
       shell: bash
       run: |
-        docker run --rm -v "$PWD:/src" bridgecrew/checkov:3.2.255 \
-          -d /src/${{ inputs.iac_path }} --framework terraform --compact
+        pipx install --quiet "checkov==3.4.11"
+        checkov -d "${{ inputs.iac_path }}" --framework terraform --compact --quiet
