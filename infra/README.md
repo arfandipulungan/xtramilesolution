@@ -5,8 +5,18 @@ Three layers. Logic is written once; each environment only supplies parameters.
 | Layer | Path | Contains |
 | --- | --- | --- |
 | Modules | `modules/<cloud>/<component>` | One building block each (network, app-service, alb, rds, ...), secure defaults baked in |
-| Stacks | `stacks/<hosting-model>` | Composition of modules for one hosting model (`azure-api`, `aws-3tier`) |
+| Stacks | `stacks/<hosting-model>` | Composition of modules for one hosting model: `azure-api` (App Service), `azure-func` (Functions), `azure-iis-vm` (IIS on Windows VM), `aws-3tier` (EC2 + ALB + RDS + S3), and the pipeline identities `azure-github-oidc` / `aws-github-oidc` |
 | Live | `live/<env>/<cloud>/<app>` | `backend.tf`, `providers.tf`, `main.tf` with parameters only |
+
+## Estate coverage
+
+| Live root | Stack | Hosting model |
+| --- | --- | --- |
+| `live/<env>/azure/customer-api` | `azure-api` | .NET 8 Web API on App Service |
+| `live/<env>/azure/order-events` | `azure-func` | .NET 8 isolated on Azure Functions (Elastic Premium) |
+| `live/<env>/azure/legacy-portal` | `azure-iis-vm` | .NET Framework 4.8 on IIS, Windows VM |
+| `live/<env>/aws/legacy-web` | `aws-3tier` | EC2 behind ALB, RDS, S3 |
+| `live/<env>/{azure,aws}/github-oidc` | `*-github-oidc` | OIDC identities for the pipelines (bootstrap once by a platform admin) |
 
 ## Add something new
 

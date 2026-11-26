@@ -70,6 +70,21 @@ resource "azurerm_linux_web_app" "this" {
     health_check_path                 = "/health"
     health_check_eviction_time_in_min = 5
 
+    # Self-healing: recycle the worker on a burst of 5xx (the health check evicts bad instances too).
+    auto_heal_setting {
+      action {
+        action_type                    = "Recycle"
+        minimum_process_execution_time = "00:05:00"
+      }
+      trigger {
+        status_code {
+          count             = 50
+          interval          = "00:05:00"
+          status_code_range = "500-599"
+        }
+      }
+    }
+
     application_stack {
       dotnet_version = "8.0"
     }
@@ -116,6 +131,21 @@ resource "azurerm_linux_web_app_slot" "staging" {
     vnet_route_all_enabled            = true
     health_check_path                 = "/health"
     health_check_eviction_time_in_min = 5
+
+    # Self-healing: recycle the worker on a burst of 5xx (the health check evicts bad instances too).
+    auto_heal_setting {
+      action {
+        action_type                    = "Recycle"
+        minimum_process_execution_time = "00:05:00"
+      }
+      trigger {
+        status_code {
+          count             = 50
+          interval          = "00:05:00"
+          status_code_range = "500-599"
+        }
+      }
+    }
 
     application_stack {
       dotnet_version = "8.0"

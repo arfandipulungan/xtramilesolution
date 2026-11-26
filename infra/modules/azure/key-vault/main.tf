@@ -16,6 +16,10 @@ resource "azurerm_key_vault" "this" {
     default_action = "Deny"
     bypass         = "AzureServices"
   }
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "azurerm_private_endpoint" "this" {
