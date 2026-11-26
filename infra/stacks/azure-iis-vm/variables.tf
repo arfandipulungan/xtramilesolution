@@ -31,3 +31,9 @@ variable "vm_size" {
   type    = string
   default = "Standard_D2s_v5"
 }
+
+variable "name_overrides" {
+  description = "Real names of imported (brownfield) resources; see modules/shared/naming"
+  type        = map(string)
+  default     = {}
+}

@@ -1,10 +1,11 @@
 # Composition for a .NET 8 API on Azure App Service (e.g. customer-api).
 # One call per app per environment from infra/live/<env>/azure/<app>.
 module "naming" {
-  source      = "../../modules/shared/naming"
-  app         = var.app
-  environment = var.environment
-  owner       = var.owner
+  source         = "../../modules/shared/naming"
+  app            = var.app
+  environment    = var.environment
+  owner          = var.owner
+  name_overrides = var.name_overrides
 }
 
 locals {

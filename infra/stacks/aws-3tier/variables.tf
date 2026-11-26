@@ -66,3 +66,9 @@ variable "break_glass_role_arns" {
   type    = list(string)
   default = []
 }
+
+variable "name_overrides" {
+  description = "Real names of imported (brownfield) resources; see modules/shared/naming"
+  type        = map(string)
+  default     = {}
+}

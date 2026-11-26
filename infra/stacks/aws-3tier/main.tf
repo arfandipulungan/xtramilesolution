@@ -1,14 +1,19 @@
 # Composition for the AWS 3-tier app (e.g. legacy-web): VPC, ALB + WAF,
 # EC2 Auto Scaling Group, RDS, locked-down S3, CodeDeploy blue/green.
 module "naming" {
-  source      = "../../modules/shared/naming"
-  app         = var.app
-  environment = var.environment
-  owner       = var.owner
+  source         = "../../modules/shared/naming"
+  app            = var.app
+  environment    = var.environment
+  owner          = var.owner
+  name_overrides = var.name_overrides
 }
 
 locals {
   n = module.naming.names
+
+  # Bucket names include the account ID (global namespace); imported buckets keep their real names.
+  artifact_bucket_name       = lookup(var.name_overrides, "artifact_bucket", "${module.naming.base}-artifacts-${data.aws_caller_identity.current.account_id}")
+  customer_files_bucket_name = lookup(var.name_overrides, "customer_files_bucket", "${module.naming.base}-customer-files-${data.aws_caller_identity.current.account_id}")
 }
 
 data "aws_caller_identity" "current" {}
@@ -65,7 +70,7 @@ module "vpc" {
 
 module "artifact_bucket" {
   source                  = "../../modules/aws/s3-secure"
-  name                    = "${module.naming.base}-artifacts-${data.aws_caller_identity.current.account_id}"
+  name                    = local.artifact_bucket_name
   kms_key_arn             = aws_kms_key.this.arn
   access_log_bucket       = var.log_archive_bucket
   allowed_vpc_endpoint_id = null
@@ -75,7 +80,7 @@ module "artifact_bucket" {
 # Customer files / exports: previously over-exposed, now private and VPC-endpoint only.
 module "customer_files_bucket" {
   source                  = "../../modules/aws/s3-secure"
-  name                    = "${module.naming.base}-customer-files-${data.aws_caller_identity.current.account_id}"
+  name                    = local.customer_files_bucket_name
   kms_key_arn             = aws_kms_key.this.arn
   access_log_bucket       = var.log_archive_bucket
   allowed_vpc_endpoint_id = module.vpc.s3_endpoint_id

@@ -1,0 +1,5 @@
+# Add to the module "stack" block in infra/live/prod/aws/legacy-web/main.tf:
+
+  name_overrides = {
+    customer_files_bucket = "legacyweb-customer-exports"
+  }

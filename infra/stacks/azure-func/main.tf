@@ -1,9 +1,10 @@
 # Composition for a .NET 8 background/event-driven app on Azure Functions.
 module "naming" {
-  source      = "../../modules/shared/naming"
-  app         = var.app
-  environment = var.environment
-  owner       = var.owner
+  source         = "../../modules/shared/naming"
+  app            = var.app
+  environment    = var.environment
+  owner          = var.owner
+  name_overrides = var.name_overrides
 }
 
 locals {
