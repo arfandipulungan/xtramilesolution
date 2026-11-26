@@ -13,3 +13,7 @@ TestResults/
 *.tfplan
 tfplan
 plan.txt
+
+# Ansible
+ansible/collections/
+ansible/.venv/

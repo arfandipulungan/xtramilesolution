@@ -1,0 +1,8 @@
+---
+- name: Patch Windows hosts
+  ansible.builtin.include_tasks: windows.yml
+  when: ansible_facts['os_family'] == 'Windows'
+
+- name: Patch Amazon Linux hosts
+  ansible.builtin.include_tasks: linux.yml
+  when: ansible_facts['os_family'] == 'RedHat'

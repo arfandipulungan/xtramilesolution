@@ -1,0 +1,6 @@
+---
+# Strictest built-in profile; any violation fails the pipeline.
+profile: production
+exclude_paths:
+  - collections/
+  - .cache/

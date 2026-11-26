@@ -1,0 +1,11 @@
+---
+- name: Install security and critical updates
+  ansible.windows.win_updates:
+    category_names: "{{ patching_windows_categories }}"
+    reboot: "{{ patching_reboot }}"
+    reboot_timeout: 1800
+  register: patching_windows_result
+
+- name: Record installed updates
+  ansible.builtin.debug:
+    msg: "Installed {{ patching_windows_result.installed_update_count | default(0) }} update(s)"

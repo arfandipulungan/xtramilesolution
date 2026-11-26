@@ -1,0 +1,61 @@
+---
+- name: Disable legacy SSL/TLS protocols (server and client)
+  ansible.windows.win_regedit:
+    path: "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\SecurityProviders\\SCHANNEL\\Protocols\\{{ item.0 }}\\{{ item.1 }}"
+    name: Enabled
+    data: 0
+    type: dword
+  loop: "{{ windows_hardening_disabled_protocols | product(['Server', 'Client']) | list }}"
+  loop_control:
+    label: "{{ item.0 }} {{ item.1 }}"
+  notify: Reboot after protocol change
+
+- name: Remove SMBv1
+  ansible.windows.win_optional_feature:
+    name: SMB1Protocol
+    state: absent
+  notify: Reboot after protocol change
+
+- name: Require Network Level Authentication for RDP (Bastion only)
+  ansible.windows.win_regedit:
+    path: HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp
+    name: UserAuthentication
+    data: 1
+    type: dword
+
+- name: Disable LLMNR
+  ansible.windows.win_regedit:
+    path: HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient
+    name: EnableMulticast
+    data: 0
+    type: dword
+
+- name: Enable PowerShell script block logging
+  ansible.windows.win_regedit:
+    path: HKLM:\SOFTWARE\Policies\Microsoft\Windows\PowerShell\ScriptBlockLogging
+    name: EnableScriptBlockLogging
+    data: 1
+    type: dword
+
+- name: Keep Microsoft Defender real-time protection on
+  ansible.windows.win_regedit:
+    path: HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender\Real-Time Protection
+    name: DisableRealtimeMonitoring
+    data: 0
+    type: dword
+
+- name: Enable the Windows firewall on all profiles
+  ansible.windows.win_firewall:
+    state: enabled
+    profiles:
+      - Domain
+      - Private
+      - Public
+
+- name: Audit security-relevant events (shipped to Log Analytics by Azure Monitor Agent)
+  ansible.windows.win_audit_policy_system:
+    subcategory: "{{ item }}"
+    audit_type:
+      - success
+      - failure
+  loop: "{{ windows_hardening_audit_categories }}"

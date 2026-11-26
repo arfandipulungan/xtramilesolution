@@ -1,0 +1,8 @@
+---
+# WinRM over HTTPS (5986), reachable only from the self-hosted runner subnet in the hub
+# (NSG in infra/stacks/azure-iis-vm). Kerberos auth with an Entra Domain Services account.
+ansible_connection: winrm
+ansible_port: 5986
+ansible_winrm_transport: kerberos
+ansible_winrm_server_cert_validation: validate
+ansible_shell_type: powershell

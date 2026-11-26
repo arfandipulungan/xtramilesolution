@@ -1,0 +1,13 @@
+---
+- name: Linux app hosts (legacy-web on EC2 behind the ALB)
+  hosts: linux_app
+  gather_facts: true
+  serial: "50%"   # half the fleet at a time; the ALB keeps serving from the rest
+  roles:
+    - role: linux_hardening
+    - role: patching
+    - role: dotnet_runtime
+    - role: cloudwatch_agent
+      vars:
+        cloudwatch_agent_app: legacy-web
+        cloudwatch_agent_environment: "{{ tags.environment | default('dev') }}"

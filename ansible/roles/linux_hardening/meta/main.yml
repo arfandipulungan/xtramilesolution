@@ -1,0 +1,11 @@
+---
+galaxy_info:
+  author: Arfandi Pulungan
+  description: CIS-aligned baseline for Amazon Linux 2023 app hosts
+  license: MIT
+  min_ansible_version: "2.17"
+  platforms:
+    - name: Amazon
+      versions:
+        - all
+dependencies: []

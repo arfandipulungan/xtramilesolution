@@ -1,0 +1,15 @@
+---
+# Protocols disabled server-wide (SCHANNEL); TLS 1.2 and 1.3 stay enabled.
+windows_hardening_disabled_protocols:
+  - SSL 2.0
+  - SSL 3.0
+  - TLS 1.0
+  - TLS 1.1
+windows_hardening_audit_categories:
+  - Logon
+  - Account Lockout
+  - Special Logon
+  - Process Creation
+  - Security Group Management
+  - User Account Management
+  - Audit Policy Change
