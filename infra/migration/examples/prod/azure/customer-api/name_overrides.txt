@@ -1,0 +1,7 @@
+# Add to the module "stack" block in infra/live/prod/azure/customer-api/main.tf:
+
+  name_overrides = {
+    resource_group = "rg-prod-custapi"
+    service_plan   = "asp-custapi-prod"
+    app_service    = "custapi-prod-web"
+  }

@@ -45,3 +45,9 @@ variable "app_settings" {
   type    = map(string)
   default = {}
 }
+
+variable "name_overrides" {
+  description = "Real names of imported (brownfield) resources; see modules/shared/naming"
+  type        = map(string)
+  default     = {}
+}

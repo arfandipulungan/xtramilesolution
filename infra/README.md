@@ -24,6 +24,12 @@ Three layers. Logic is written once; each environment only supplies parameters.
 - **New environment:** add `live/<new-env>/...` folders; the pipeline discovers them automatically.
 - **New hosting model or cloud target:** add modules + one stack; existing apps are untouched.
 
+## Existing (click-built) resources
+
+The estate is brownfield. Stateful resources are **imported** with `import` blocks and
+`name_overrides`; unsafe hosts and networks are **replaced** and cut over. See
+[`migration/README.md`](migration/README.md) for the strategy and worked examples.
+
 ## Local checks (no cloud account needed)
 
 ```bash

@@ -27,6 +27,16 @@ variable "cost_center" {
   default     = "product"
 }
 
+variable "name_overrides" {
+  description = <<-EOT
+    Brownfield migration: keep the real name of an imported resource whose name does not
+    follow the convention (many Azure names cannot be changed). Keys are those of the
+    `names` output, e.g. { app_service = "custapi-prod-web" }. Leave empty for new resources.
+  EOT
+  type        = map(string)
+  default     = {}
+}
+
 variable "extra_tags" {
   description = "Additional tags merged into the standard set"
   type        = map(string)

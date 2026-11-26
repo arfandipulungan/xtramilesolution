@@ -53,6 +53,10 @@ jobs:
       - name: terraform validate
         run: terraform validate -no-color
 
+      - name: Import targets exist (brownfield migration PRs)
+        if: hashFiles(format('{0}/imports.tf', inputs.working_dir)) != ''
+        run: python3 "$GITHUB_WORKSPACE/infra/migration/check_imports.py" .
+
       - name: tflint
         env:
           GITHUB_TOKEN: ${{ github.token }}   # plugin downloads

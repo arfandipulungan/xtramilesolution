@@ -5,7 +5,7 @@ output "base" {
 
 output "names" {
   description = "Resource names shared by Terraform and the deployment pipeline"
-  value = {
+  value = merge({
     resource_group   = "rg-${local.base}"
     app_service      = "app-${local.base}"
     service_plan     = "asp-${local.base}"
@@ -22,7 +22,7 @@ output "names" {
     rds              = "rds-${local.base}"
     codedeploy_app   = var.app
     codedeploy_group = local.base
-  }
+  }, var.name_overrides)
 }
 
 output "tags" {

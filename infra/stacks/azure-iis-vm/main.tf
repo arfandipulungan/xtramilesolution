@@ -2,10 +2,11 @@
 # Inbound web traffic arrives only from the WAF (Application Gateway / Front Door)
 # subnet in the hub; admin access only from Azure Bastion.
 module "naming" {
-  source      = "../../modules/shared/naming"
-  app         = var.app
-  environment = var.environment
-  owner       = var.owner
+  source         = "../../modules/shared/naming"
+  app            = var.app
+  environment    = var.environment
+  owner          = var.owner
+  name_overrides = var.name_overrides
 }
 
 locals {
